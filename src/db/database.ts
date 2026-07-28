@@ -26,7 +26,11 @@ export type AnalyticsSummaryRow = {
 const analyticsStorage = (process.env.ANALYTICS_STORAGE ?? '').toLowerCase()
 const shouldUsePostgres = analyticsStorage === 'postgres'
 
-const getPool = (): Pool => getPgPool()
+const getPool = (): Pool => {
+  const pool = getPgPool()
+  if (!pool) throw new Error('PostgreSQL pool is not configured')
+  return pool
+}
 
 const initializePostgresSchema = async (pool: Pool): Promise<void> => {
   await pool.query(`
@@ -140,11 +144,13 @@ export function closeDatabase(): void {
   void getPool().end().catch(() => undefined)
 }
 
-export function updateAnalyticsSummary(): void {
+export async function updateAnalyticsSummary(): Promise<void> {
   const pool = getPool()
-  void writePostgresSummary(pool).catch((error) => {
+  try {
+    await writePostgresSummary(pool)
+  } catch (error) {
     console.warn('PostgreSQL analytics summary update failed:', error)
-  })
+  }
 }
 
 const mapSummary = (row: Record<string, unknown>): AnalyticsSummaryRow => ({
@@ -233,3 +239,5 @@ export function getTimeRangeFilter(period: string): { startDate: string; endDate
 
   return { startDate, endDate }
 }
+
+export const db = getPool()
